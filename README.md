@@ -12,7 +12,7 @@ explain where the base models came from. explain how they were stitched together
 ### Results
 show the result graphs from tensorboard and the example images. Explain a little about the embedding layer's histogram and how it might be better to use a smaller embedding layer.
 
-![alt text](https://github.com/lucaspettit/HyperEncoder/tree/master/images/Screenshot from 2018-03-13 08-51-17.png)
+![alt text](https://github.com/lucaspettit/HyperEncoder/blob/master/images/encode-decode%20example.png)
 
 ![alt text](https://github.com/lucaspettit/HyperEncoder/tree/master/images/test_images_epoch_20_face_only.jpg)
 
