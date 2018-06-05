@@ -33,15 +33,15 @@ if __name__ == '__main__':
         parser.add_argument('--x_height', type=int, default=227,
                             help='The height of the input image [227]')
         parser.add_argument('--x_width', type=int, default=None,
-                            help='The width of the input image. If None, same value as x_hight [None]')
+                            help='The width of the input image. If None, same value as x_height [None]')
         parser.add_argument('--y_height', type=int, default=64,
                             help='The height of the image to be generated [64]')
         parser.add_argument('--y_width', type=int, default=None,
                             help='The width of the image to be generated. If None, same value as y_height. [None]')
 
         # directories
-        parser.add_argument('--dataset_dir', type=str, default='data',
-                            help='The directory where the datasets are stored')
+        parser.add_argument('--dataset_dir', type=str, required=True,
+                            help='The directory where the dataset are stored')
         parser.add_argument('--dataset_name', type=str, default=None,
                             help='Name of the dataset')
 
@@ -67,11 +67,18 @@ if __name__ == '__main__':
 
         args = parser.parse_args()
 
+        # verify path
+        dp = args.dataset_dir
+        if not os.path.isdir(dp):
+            raise ValueError('%s is not a directory' % dp)
+
         # adjust data
         if args.x_width is None:
             args.x_width = args.x_height
         if args.y_width is None:
             args.y_width = args.y_height
+        if args.dataset_name is None:
+            args.dataset_name = os.path.basename(dp.strip('\\'))
 
         # make dirs
         if not os.path.exists(args.checkpoint_dir):
