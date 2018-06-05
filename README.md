@@ -2,13 +2,13 @@
 ### Overview
 This is an auto-encoder network which uses the architecture from [HyperFace: A Deep Multi-task Learning Framework](https://arxiv.org/abs/1603.01249) to create the embedding and [Deep Convolutional Generative Adversarial Networks](https://arxiv.org/abs/1511.06434) for the decoder network.
 Auto-encoders are a core element in many algorithms, including anomoly detection and DeepFakes. The basic goal of the model is to produce a small *embedding* which retains all the important information from the original image. This is done by creating an *hourglass* shaped neural network. The first half reduces the demensions until it reaches it's smallest size (the embedding dimension). The second half will upscale the embedding and match it back to the original image. 
-**Example of Architecture:** below is a visual of the architecture. The compressed image inbetween the encoder and decoder represents the embedding layer. It is roughly the same dimensions as a 128-dim embedding, which is the size used in my experoments.
+**Example of Architecture:** below is a visual of the architecture. The compressed image inbetween the encoder and decoder represents the embedding layer. It is roughly the same dimensions as a 100-dim embedding, which is the size used in my experoments.
 ![alt text](https://github.com/lucaspettit/HyperEncoder/blob/master/images/encode-decode%20example.png)
 
 ### Design
-This model was trained using the CelebA dataset to produce a 128-dim embedding with the decoder producing a 64x64 RGB image. Mean Squared Error was used to train calculate the loss between the predicted image and the ground truth (original image resized to 64x64). This loss function is different than the one's used by HyperFace or DCGNN since this model has a different target.
+This model was trained using the CelebA dataset to produce a 100-dim embedding with the decoder producing a 64x64 RGB image. Mean Squared Error was used to train calculate the loss between the predicted image and the ground truth (original image resized to 64x64). This loss function is different than the one's used by HyperFace or DCGNN since this model has a different target.
 Before training the images were cropped to the facial boundingbox region and resized to 227x227 using MTCNN for the facial detection and OpenCV for cropping/resizing.
-
+<\br>
 **Learning Rates & Embedding Stats:** Top-Left: the embedding MAX value, Top-Right: the embedding MIN value, Bottom-Left: the embedding STD, Bottom-Right: the Mean Squared Error loss during training (orange is trining, blue is validation set).
 
 
