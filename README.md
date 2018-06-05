@@ -26,12 +26,13 @@ Training was stopped once the model began to overfit the data. I believe more ac
 **TRAIN MODEL**
 To train the model, run the following command with --dataset_dir pointing to a file with the images to train on. 
 You can open up TensorBoard and view training statistics & graphs. 
+```
 $> python3 main.py --dataset_dir=<path to dataset> --train=True
-
+```
 
 **FLAGS**
 Directory Flags
-```Python
+```
 --dataset_dir   : The directoy where the dataset is stored.
                    Required=True
 --dataset_name  : The name of the dataset. If None, name of dataset directory will be used.
@@ -49,7 +50,7 @@ Directory Flags
 ```
 
 Training parameters
-```Python
+```
 --epoch         : Training epoch. 
                    Default=25
 --learning_rate : Learning rate for Adam. 
@@ -61,7 +62,7 @@ Training parameters
 ```
 
 Model parameters
-```Python
+```
 --embed_size    : Size of the embedding layer.
                    Default=100
 --x_height      : The height of the input image.
