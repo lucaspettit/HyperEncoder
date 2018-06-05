@@ -8,7 +8,9 @@ Auto-encoders are a core element in many algorithms, including anomoly detection
 ### Design
 This model was trained using the CelebA dataset to produce a 100-dim embedding with the decoder producing a 64x64 RGB image. Mean Squared Error was used to train calculate the loss between the predicted image and the ground truth (original image resized to 64x64). This loss function is different than the one's used by HyperFace or DCGNN since this model has a different target.
 Before training the images were cropped to the facial boundingbox region and resized to 227x227 using MTCNN for the facial detection and OpenCV for cropping/resizing.
-<\br>
+
+
+
 **Learning Rates & Embedding Stats:** Top-Left: the embedding MAX value, Top-Right: the embedding MIN value, Bottom-Left: the embedding STD, Bottom-Right: the Mean Squared Error loss during training (orange is trining, blue is validation set).
 
 
