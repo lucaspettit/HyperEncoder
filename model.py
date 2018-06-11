@@ -8,7 +8,7 @@ import numpy as np
 import time
 import cv2
 import re
-import math
+import os
 
 try:
     from hyperencoder.Data import dataset
@@ -18,12 +18,12 @@ except ImportError as e:
 
 class HyperEncoder(object):
     def __init__(self, sess, data, batch_size=64, train=False, x_shape=(227, 227, 3), y_shape=(128, 128, 3), embed_dim=128,
-                 checkpoint_dir='checkpoint', **kwargs):
+                 checkpoint_dir=None, **kwargs):
 
         self.data = data
         self.sess = sess
         self._is_training = train
-        self._checkpoint_dir = checkpoint_dir
+        self._checkpoint_dir = checkpoint_dir if checkpoint_dir is not None else os.path.join(os.path.dirname(__file__), 'checkpoint')
 
         self.batch_size = batch_size
         self.x_shape = [dim for dim in x_shape]
@@ -174,7 +174,7 @@ class HyperEncoder(object):
         print('sample saved at %s' % sample_filename)
 
     def train(self, learning_rate, beta1, epochs,
-              sample_dir='samples', log_dir='logs'):
+              sample_dir, log_dir):
 
         print(' [*] Training [%s]' % self.data.name)
 
