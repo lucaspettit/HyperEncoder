@@ -26,10 +26,17 @@ Training was stopped once the model began to overfit the data. I believe more ac
 ### Usage
 
 **TRAIN MODEL**
-To train the model, run the following command with --dataset_dir pointing to a file with the images to train on. 
-You can open up TensorBoard and view training statistics & graphs. 
+To train the model, run the following command with --dataset_dir pointing to a file with the images to train on.
 ```
 $> python3 main.py --dataset_dir=<path to dataset> --train=True
+```
+You can open up TensorBoard and view training statistics & graphs with this command.
+```
+$> tensorboard --logdir=<path to log-directory>
+```
+*note* if you get the error `Fatal error in launcher: Unable to create process using '"'`, then try starting TensorBoard with this command:
+```
+$> python3 -m tensorflow.tensorboard --logdir=<path to log-directory>
 ```
 
 **FLAGS**
@@ -43,6 +50,8 @@ Directory Flags
                    Default=checkpoint
 --sample_dir    : Directory name to save image samples.
                    Default=samples
+--log_dir       : Directory name to save log files. Used for TensorBoard.
+                   Default=logs
 --train         : True for training. False for testing.
                    Default=True
 --model_path    : The path for the model to use during testing.
