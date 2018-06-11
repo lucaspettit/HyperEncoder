@@ -45,21 +45,22 @@ if __name__ == '__main__':
         parser.add_argument('--dataset_name', type=str, default=None,
                             help='Name of the dataset')
 
-        parser.add_argument('--checkpoint_dir', type=str, default='checkpoint',
-                            help='Directory name to save the checkpoints [checkpoint]')
-        parser.add_argument('--sample_dir', type=str, default='samples',
-                            help='Directory name to save the image samples [samples]')
+        parser.add_argument('--checkpoint_dir', type=str, default=os.path.join(os.path.dirname(__file__), 'checkpoint'),
+                            help='Directory name to save the checkpoints [./checkpoint]')
+        parser.add_argument('--sample_dir', type=str, default=os.path.join(os.path.dirname(__file__), 'samples'),
+                            help='Directory name to save the image samples [./samples]')
+        parser.add_argument('--log_dir', type=str, default=os.path.join(os.path.dirname(__file__), 'logs'),
+                            help='Directory name to save the logs [./logs]')
 
         # train flag
         parser.add_argument('--train', type=bool, default=False, help='True for training, False for testing [False]')
 
-
-        # for hyperface
+        # for encoder
         # TODO: maybe the same as --checkpoint_dir
-        parser.add_argument('--model_path', dest='model_path', type=str, default='models',
+        parser.add_argument('--model_path', type=str, default=os.path.join(os.path.dirname(__file__), 'models'),
                             help='Enter the path for the model to use for testing [models]')
-        parser.add_argument('--tf_record_path', dest='tf_record_file_path', type=str, required=False,
-                            help='Enter the path for the TF Record File to use for training')
+        parser.add_argument('--tf_record_path', type=str, default=os.path.join(os.path.dirname(__file__), 'tf_record_path'),
+                            help='Enter the path for the TF Record File to use for training [./tf_record_path]')
 
         # define the size of the embedding
         parser.add_argument('--embed_size', dest='embed_size', default=100, type=int,
@@ -85,8 +86,8 @@ if __name__ == '__main__':
             os.mkdir(args.checkpoint_dir)
         if not os.path.exists(args.sample_dir):
             os.mkdir(args.sample_dir)
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
+        if not os.path.exists(args.log_dir):
+            os.mkdir(args.log_dir)
 
         return args
 
@@ -107,6 +108,8 @@ if __name__ == '__main__':
             encoder = HyperEncoder(sess=sess, data=ds, x_shape=x_shape, y_shape=y_shape, **kwargs)
             encoder.train(learning_rate=kwargs['learning_rate'],
                           beta1=kwargs['beta1'],
-                          epochs=kwargs['epoch'])
+                          epochs=kwargs['epoch'],
+                          sample_dir=kwargs['sample_dir'],
+                          log_dir=kwargs['log_dir'])
 
 
