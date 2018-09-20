@@ -3,7 +3,7 @@ import numpy as np
 from queue import Queue
 import threading
 import cv2
-from random import _shuffle, randint
+from random import shuffle as _shuffle, randint
 
 
 class dataset(object):
