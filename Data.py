@@ -3,7 +3,7 @@ import numpy as np
 from queue import Queue
 import threading
 import cv2
-from random import shuffle, randint
+from random import _shuffle, randint
 
 
 class dataset(object):
@@ -12,11 +12,12 @@ class dataset(object):
     mulithreaded read images from folder + create batches
     """
 
-    def __init__(self, input_dir, batch_size, x_shape, y_shape=None, split=0.9, name=None):
+    def __init__(self, input_dir, batch_size, x_shape, y_shape=None, split=0.9, name=None, shuffle=True):
         datapaths = [os.path.join(input_dir, f) for f in os.listdir(input_dir)
                      if os.path.isfile(os.path.join(input_dir, f))]
 
-        shuffle(datapaths)
+        if shuffle:
+            _shuffle(datapaths)
 
         if name is None:
             self.name = os.path.basename(input_dir)
@@ -81,8 +82,18 @@ class dataset(object):
         res = None
         try:
             img = cv2.imread(filename)
-            x = cv2.resize(img, self._x_shape, interpolation=cv2.INTER_CUBIC)
+            # check for and handle grayscale images
+            shape = img.shape
+            if len(shape) < 3 or len(shape[2]) == 1:
+                h, w = shape
+                img2 = np.zeros(h * w * 3, dtype=np.uint8).reshape(h, w, 3)
+                for i in range(3):
+                    img2[:, :, i] = img[:, :]
+                img = img2
+
             y = cv2.resize(img, self._y_shape, interpolation=cv2.INTER_CUBIC)
+            x = cv2.resize(img, self._x_shape, interpolation=cv2.INTER_CUBIC)
+            x = cv2.cvtColor(x, cv2.COLOR_BGR2GRAY)
             # normalize y to be within tanh values [-1, 1]
             y = self.normalize_image(y)
             res = x, y
