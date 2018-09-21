@@ -4,6 +4,7 @@ from queue import Queue
 import threading
 import cv2
 from random import shuffle as _shuffle, randint
+import time
 
 
 class dataset(object):
@@ -39,7 +40,7 @@ class dataset(object):
         self._next_training_index = 0
         self._next_test_index = 0
 
-        self._training_batch_q = Queue(maxsize=3)
+        self._training_batch_q = Queue(maxsize=5)
         self._test_batch_q = Queue(maxsize=3)
 
         self._batch_training_thread = threading.Thread(target=self._fill_training_batch_q,
@@ -78,22 +79,28 @@ class dataset(object):
        img = img * (255.0 / 2.0)
        return img
 
+    @staticmethod
+    def _grayscaleToRGB(gray):
+        h, w = gray.shape[:2]
+        img = np.zeros(h * w * 3,dtype=np.uint8).reshape(h, w, 3)
+        for i in range(3):
+            img[:,:,i] = gray
+        return img
+
     def _get_xy(self, filename):
         res = None
         try:
             img = cv2.imread(filename)
+
             # check for and handle grayscale images
             shape = img.shape
-            if len(shape) < 3 or len(shape[2]) == 1:
-                h, w = shape
-                img2 = np.zeros(h * w * 3, dtype=np.uint8).reshape(h, w, 3)
-                for i in range(3):
-                    img2[:, :, i] = img[:, :]
-                img = img2
+            if len(shape) < 3 or shape[2] == 1:
+                img = self._grayscaleToRGB(img)
 
             y = cv2.resize(img, self._y_shape, interpolation=cv2.INTER_CUBIC)
             x = cv2.resize(img, self._x_shape, interpolation=cv2.INTER_CUBIC)
-            x = cv2.cvtColor(x, cv2.COLOR_BGR2GRAY)
+            x = self._grayscaleToRGB(cv2.cvtColor(x, cv2.COLOR_BGR2GRAY))
+
             # normalize y to be within tanh values [-1, 1]
             y = self.normalize_image(y)
             res = x, y
@@ -103,9 +110,14 @@ class dataset(object):
         return res
 
     def _fill_training_batch_q(self):
+        t_name = threading.current_thread().getName()
+        #print('%s: starting' % t_name)
+
         while self._training_batch_q.not_full:
             batch_x = []
             batch_y = []
+
+            #print('%s: batch queue not full. filling queue.' % t_name)
 
             while len(batch_x) < self._batch_size:
                 filename = self._get_next_filepath(training=True)
@@ -121,9 +133,16 @@ class dataset(object):
             batch_y = np.array(batch_y)
             self._training_batch_q.put((batch_x, batch_y))
 
+        #print('%s: exiting' % t_name)
+
     def _fill_test_batch_q(self):
+
+        t_name = threading.current_thread().getName()
+        #print('%s: starting' % t_name)
+
         while self._test_batch_q.not_full:
             batch_x, batch_y = [], []
+            #print('%s: batch queue not full. filling queue.' % t_name)
 
             while len(batch_x) < self._batch_size:
                 filename = self._get_next_filepath(training=False)
@@ -142,10 +161,14 @@ class dataset(object):
         batch = None, None
         if training:
             while self._training_batch_q.empty():
+                #print('t-main: training batch queue empty. sleeping for 1 second')
+                time.sleep(1)
                 pass
             batch = self._training_batch_q.get()
         else:
             while self._test_batch_q.empty():
+                #print('t-main: testing batch queue empty. sleeping for 1 second')
+                time.sleep(1)
                 pass
             batch = self._test_batch_q.get()
         return batch

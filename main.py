@@ -105,7 +105,16 @@ if __name__ == '__main__':
         if args.train:
             kwargs = vars(args)
             ds = dataset(datapath, batch_size, x_shape[:2], y_shape[:2], name=dsname)
-            encoder = HyperEncoder(sess=sess, data=ds, x_shape=x_shape, y_shape=y_shape, **kwargs)
+
+            # build model
+            encoder = HyperEncoder(sess=sess,
+                                   data=ds,
+                                   x_shape=x_shape,
+                                   y_shape=y_shape,
+                                   embed_dim=args.embed_size,
+                                   **kwargs)
+
+            # train model
             encoder.train(learning_rate=kwargs['learning_rate'],
                           beta1=kwargs['beta1'],
                           epochs=kwargs['epoch'],

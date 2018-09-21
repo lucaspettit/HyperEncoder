@@ -277,6 +277,20 @@ class HyperEncoder(object):
                 if np.mod(checkpoint_counter, 500) == 2:
                     self.save(checkpoint_counter)
 
+    def encode(self, x):
+        """ Handler to Encode an image into a vector
+        :param x: numpy matrix or list of numpy matrixes (images) - image dim must be equivalent to input size
+        :return: numpy matrix (embeddings)
+        """
+        return None
+
+    def decode(self, x):
+        """ Handler to Decode a vector into an image
+        :param x: numpy matrix or list f numpy matrixes (vectors) - n = number of vectors, m = embedding size
+        :return: numpy matrix or list of numpy matrixes (images)
+        """
+        return None
+
     @property
     def model_dir(self):
         d = "{}_{}_{}_{}".format(
