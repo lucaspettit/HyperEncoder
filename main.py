@@ -29,7 +29,7 @@ if __name__ == '__main__':
         parser.add_argument('--beta1', type=float, default=0.5, help='Momentum term of Adam [0.5]')
         parser.add_argument('--batch_size', type=int, default=64, help='The size of the batch images [64]')
 
-        # input/output dimensions
+        # data input/output
         parser.add_argument('--x_height', type=int, default=227,
                             help='The height of the input image [227]')
         parser.add_argument('--x_width', type=int, default=None,
@@ -38,6 +38,8 @@ if __name__ == '__main__':
                             help='The height of the image to be generated [64]')
         parser.add_argument('--y_width', type=int, default=None,
                             help='The width of the image to be generated. If None, same value as y_height. [None]')
+        parser.add_argument('--keep_grayscale', type=bool, required=False,
+                            help='Flag to specify if grayscale images should be included in the training dataset')
 
         # directories
         parser.add_argument('--dataset_dir', type=str, required=True,

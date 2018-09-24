@@ -13,9 +13,19 @@ class dataset(object):
     mulithreaded read images from folder + create batches
     """
 
-    def __init__(self, input_dir, batch_size, x_shape, y_shape=None, split=0.9, name=None, shuffle=True):
+    def __init__(self,
+                 input_dir,
+                 batch_size,
+                 x_shape,
+                 y_shape=None,
+                 split=0.9,
+                 name=None,
+                 keep_grayscale=True,
+                 shuffle=True):
+
         datapaths = [os.path.join(input_dir, f) for f in os.listdir(input_dir)
                      if os.path.isfile(os.path.join(input_dir, f))]
+
 
         if shuffle:
             _shuffle(datapaths)
@@ -25,6 +35,7 @@ class dataset(object):
         else:
             self.name = name
 
+        self._keep_grayscale = keep_grayscale
         self._x_shape = x_shape
         self._y_shape = x_shape if y_shape is None else y_shape
         self._batch_size = batch_size
@@ -87,7 +98,7 @@ class dataset(object):
             img[:,:,i] = gray
         return img
 
-    def _get_xy(self, filename):
+    def _get_xy(self, filename, keep_grayscale=True):
         res = None
         try:
             img = cv2.imread(filename)
@@ -95,7 +106,8 @@ class dataset(object):
             # check for and handle grayscale images
             shape = img.shape
             if len(shape) < 3 or shape[2] == 1:
-                img = self._grayscaleToRGB(img)
+                if keep_grayscale:
+                    img = self._grayscaleToRGB(img)
 
             y = cv2.resize(img, self._y_shape, interpolation=cv2.INTER_CUBIC)
             x = cv2.resize(img, self._x_shape, interpolation=cv2.INTER_CUBIC)
@@ -122,7 +134,7 @@ class dataset(object):
             while len(batch_x) < self._batch_size:
                 filename = self._get_next_filepath(training=True)
 
-                res = self._get_xy(filename)
+                res = self._get_xy(filename, self._keep_grayscale)
                 if res is None:
                     continue
                 x, y = res
