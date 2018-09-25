@@ -30,14 +30,12 @@ if __name__ == '__main__':
         parser.add_argument('--batch_size', type=int, default=64, help='The size of the batch images [64]')
 
         # data input/output
-        parser.add_argument('--x_height', type=int, default=227,
-                            help='The height of the input image [227]')
-        parser.add_argument('--x_width', type=int, default=None,
-                            help='The width of the input image. If None, same value as x_height [None]')
-        parser.add_argument('--y_height', type=int, default=64,
-                            help='The height of the image to be generated [64]')
-        parser.add_argument('--y_width', type=int, default=None,
-                            help='The width of the image to be generated. If None, same value as y_height. [None]')
+        parser.add_argument('--x_dim', type=str, default='(277,277,3)',
+                            help='The dimensions of the input image [(227,227,3)]')
+
+        parser.add_argument('--y_dim', type=str, default='(64,64)',
+                            help='The height of the image to be generated [(64,64)]')
+
         parser.add_argument('--keep_grayscale', type=bool, required=False,
                             help='Flag to specify if grayscale images should be included in the training dataset')
 
@@ -75,11 +73,26 @@ if __name__ == '__main__':
         if not os.path.isdir(dp):
             raise ValueError('%s is not a directory' % dp)
 
-        # adjust data
-        if args.x_width is None:
-            args.x_width = args.x_height
-        if args.y_width is None:
-            args.y_width = args.y_height
+        # convert x & y inputs into lists
+        args.x_dim = args.x_dim.strip('(').strip(')').split(',')
+        args.y_dim = args.y_dim.strip('(').strip(')').split(',')
+        args.x_dim = [int(x.strip()) for x in args.x_dim]
+        args.y_dim = [int(y.strip()) for y in args.y_dim]
+
+        # adjust x-dim input
+        if len(args.x_dim) == 1:
+            args.x_dim = [args.x_dim, args.x_dim, 1]
+        if len(args.x_dim) == 2:
+            args.x_dim.append(1)
+        elif len(args.x_dim) > 3:
+            raise ValueError('x_dim cannot be more than 3 values.')
+
+        # adjust y-dim input
+        if len(args.y_dim) == 1:
+            args.y_dim = [args.y_dim, args.y_dim, 3]
+        elif len(args.y_dim) > 2:
+            raise ValueError('y_dim cannot be more than 2 values.')
+
         if args.dataset_name is None:
             args.dataset_name = os.path.basename(dp.strip('\\'))
 
@@ -96,8 +109,8 @@ if __name__ == '__main__':
     args = parse_args()
     datapath = args.dataset_dir
     batch_size = args.batch_size
-    x_shape = args.x_height, args.x_width, 3
-    y_shape = args.y_height, args.y_width, 3
+    x_shape = args.x_dim
+    y_shape = args.y_dim + [3]
     dsname = args.dataset_name
 
     run_config = tf.ConfigProto()
@@ -106,7 +119,7 @@ if __name__ == '__main__':
 
         if args.train:
             kwargs = vars(args)
-            ds = dataset(datapath, batch_size, x_shape[:2], y_shape[:2], name=dsname)
+            ds = dataset(datapath, batch_size, x_shape, y_shape, name=dsname)
 
             # build model
             encoder = HyperEncoder(sess=sess,

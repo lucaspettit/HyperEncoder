@@ -35,11 +35,18 @@ class dataset(object):
         else:
             self.name = name
 
-        self._keep_grayscale = keep_grayscale
-        self._x_shape = x_shape
-        self._y_shape = x_shape if y_shape is None else y_shape
+        self._x_shape = tuple(x_shape)
+        self._y_shape = x_shape if y_shape is None else tuple(y_shape)
         self._batch_size = batch_size
         self.num_batches = int(len(datapaths) / batch_size)
+
+        # check if x is 2D
+        self._input_2d = len(x_shape) == 2 or x_shape[2] == 1
+
+        # validate grayscale
+        if not keep_grayscale and self._input_2d:
+            raise ValueError('Cannot omit grayscale and have 2D input. There will be no data to train on.')
+        self._keep_grayscale = keep_grayscale
 
         split_index = int(len(datapaths) * split)
         self._training_paths = datapaths[:split_index]
@@ -105,19 +112,22 @@ class dataset(object):
 
             # check for and handle grayscale images
             shape = img.shape
-            if len(shape) < 3 or shape[2] == 1:
-                if keep_grayscale:
-                    img = self._grayscaleToRGB(img)
+            if (len(shape) < 3 or shape[2] == 1) and keep_grayscale and not self._input_2d:
+                img = self._grayscaleToRGB(img)
 
-            y = cv2.resize(img, self._y_shape, interpolation=cv2.INTER_CUBIC)
-            x = cv2.resize(img, self._x_shape, interpolation=cv2.INTER_CUBIC)
-            x = self._grayscaleToRGB(cv2.cvtColor(x, cv2.COLOR_BGR2GRAY))
+            y = cv2.resize(img, self._y_shape[:2], interpolation=cv2.INTER_CUBIC)
+            x = cv2.resize(img, self._x_shape[:2], interpolation=cv2.INTER_CUBIC)
+
+            if self._input_2d:
+                x = cv2.cvtColor(x, cv2.COLOR_RGB2GRAY)
+                x = x.reshape(self._x_shape)
 
             # normalize y to be within tanh values [-1, 1]
             y = self.normalize_image(y)
             res = x, y
 
         except Exception as e:
+            print('  ERROR !!\n%s' % str(e))
             pass
         return res
 

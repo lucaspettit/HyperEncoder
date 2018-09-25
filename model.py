@@ -17,8 +17,16 @@ except ImportError as e:
 
 
 class HyperEncoder(object):
-    def __init__(self, sess, data, batch_size=64, train=False, x_shape=(227, 227, 3), y_shape=(128, 128, 3), embed_dim=128,
-                 checkpoint_dir=None, **kwargs):
+    def __init__(self,
+                 sess,
+                 data,
+                 batch_size=64,
+                 train=False,
+                 x_shape=(227, 227, 3),
+                 y_shape=(128, 128, 3),
+                 embed_dim=128,
+                 checkpoint_dir=None,
+                 **kwargs):
 
         self.data = data
         self.sess = sess
@@ -39,15 +47,13 @@ class HyperEncoder(object):
         self.output_layer = None
         self.decode_loss = None
 
-        # i think this is the true labels
-        self.y_ = tf.placeholder(tf.float32, [self.batch_size] + self.y_shape, name='y_')
-
-        # input layer
-        self.x = tf.placeholder(tf.float32, [self.batch_size] + self.x_shape, name='input_images')
-
         self.build_network()
 
         self.saver = tf.train.Saver()
+
+        print('HyperEncoder Model built:\n\tInput Dimension : {}\n\tEmbedding Size  : {}\n\tOutput Dimension: {}'.format(
+            x_shape, embed_dim, y_shape
+        ))
 
     def init_decoder(self, x, scope):
         # decode variables
@@ -120,36 +126,62 @@ class HyperEncoder(object):
     def init_encoder(self, input, scope='encoder'):
 
         with tf.name_scope(scope):
-            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='phi1/conv1')
-            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='phi1/max1')
+            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='conv1') # phi 1
+            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='max1') # phi 1
+            #print('conv1.shape       = {}'.format(conv1.shape))
+            #print('max1.shape        = {}'.format(max1.shape))
 
-            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='VALID', scope='phi2/conv1a')
+            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='VALID', scope='conv1a') # phi 2
+            #print('conv1a.shape      = {}'.format(conv1a.shape))
 
-            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='phi3/conv2')
-            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='phi3/max2')
-            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='phi3/conv3')
+            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='conv2') # phi 3
+            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='max2') # phi 3
+            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='conv3') # phi 3
+            #print('conv2.shape       = {}'.format(conv2.shape))
+            #print('max2.shape        = {}'.format(max2.shape))
+            #print('conv3.shape       = {}'.format(conv3.shape))
 
-            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='VALID', scope='phi3/conv3a')
+            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='VALID', scope='conv3a') # phi 3
+            #print('conv3a.shape      = {}'.format(conv3a.shape))
 
-            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='phi6/conv4')
-            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='phi6/conv5')
-            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='VALID', scope='phi6/pool5')
+            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4') # phi 6
+            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5') # phi 6
+            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5') # phi 6
+            #print('conv4.shape       = {}'.format(conv4.shape))
+            #print('conv5.shape       = {}'.format(conv5.shape))
+            #print('pool5.shape       = {}'.format(pool5.shape))
 
             concat_feat = tf.concat([conv1a, conv3a, pool5], 3)
-            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='phi6/conv_all')
+            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all') # phi 6
+            #print('concat_feat.shape = {}'.format(concat_feat.shape))
+            #print('conv_all.shape    = {}'.format(conv_all.shape))
 
             shape = int(np.prod(conv_all.get_shape()[1:]))
             fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072,
-                                              scope='phi6/fc_full1')
+                                              scope='fc_full1') # phi 6
 
-            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='phi6/fc_full2')
-            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='phi6/layer')
+            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2') # phi 6
+            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='layer') # phi 6
+            #print('fc_encode1.shape  = {}'.format(fc_encode1.shape))
+            #print('fc_encode2.shape  = {}'.format(fc_encode2.shape))
+            #print('fc_embed.shape    = {}'.format(fc_embed.shape))
 
             return conv3a, conv1a, fc_embed
 
     def build_network(self):
-        with slim.arg_scope([slim.conv2d, slim.fully_connected], activation_fn=tf.nn.relu,
+        with slim.arg_scope([slim.conv2d, slim.fully_connected],
+                            activation_fn=tf.nn.relu,
                             weights_initializer=tf.truncated_normal_initializer(0.0, 0.01)):
+
+            # i think this is the true labels
+            y_dim = [self.batch_size] + self.y_shape
+            print('y_dim = {}'.format(y_dim))
+            self.y_ = tf.placeholder(tf.float32, y_dim, name='y_')
+
+            # input layer
+            x_dim = [self.batch_size] + self.x_shape
+            print('x_dim = {}'.format(x_dim))
+            self.x = tf.placeholder(tf.float32, x_dim, name='input_images')
 
             self.conv1a, self.conv3a, self.embed_layer = self.init_encoder(self.x, scope='encoder')
             self.output_layer = self.init_decoder(self.embed_layer, 'decoder3')[-1]
@@ -190,21 +222,16 @@ class HyperEncoder(object):
 
         # log writers & summaries
         with tf.name_scope('summaries'):
-            conv1a_img = tf.reshape(self.conv1a[0], [96, 96, 1])
-            conv3a_img = tf.reshape(self.conv3a[0], [96, 96, 1])
-            img_tensor = tf.concat(self.data.denormalize_image(self.output_layer[:3]), 1)
-            low_img_sum = tf.summary.image('conv1a Image', [conv1a_img])
-            mid_img_sum = tf.summary.image('conv3a Image', [conv3a_img])
-            img_sum = tf.summary.image('Image3 Summary', img_tensor)
-            img_loss_sum = tf.summary.scalar('Image3 MSE Loss', self.loss)
-            img_hist_sum = tf.summary.histogram('Image3 Histogram', self.output_layer)
+            img_y = self.data.denormalize_image(self.output_layer[:3])
+            img_y = tf.reverse(img_y, axis=[-1])
+
+            img_tensor = tf.concat(img_y, 1)
+            img_sum = tf.summary.image('Decoded Image', img_tensor)
+
+            loss_sum = tf.summary.scalar('Loss Summary', self.loss)
 
             emb_mean = tf.reduce_mean(self.embed_layer)
             emb_std = tf.sqrt(tf.reduce_mean(tf.square(self.embed_layer - emb_mean)))
-            emb_mean_sum = tf.summary.scalar('Embed3 Mean', emb_mean)
-            emb_std_sum = tf.summary.scalar('Embed3 Std', emb_std)
-            emb_max_sum = tf.summary.scalar('Embed3 Max', tf.reduce_max(self.embed_layer))
-            emb_min_sum = tf.summary.scalar('Embed3 Min', tf.reduce_min(self.embed_layer))
             embed_hist_sum = tf.summary.histogram('Embed3 Layer Histogram', self.embed_layer)
 
         # make writer path
