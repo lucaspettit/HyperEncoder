@@ -77,7 +77,7 @@ with tf.Session(config=run_config) as sess:
         # pack the arguments for creating the HyperEncoder
         init_kwargs = {
             'sess': sess,
-            'data': None,
+            'data_controller': None,
             'name': config['model']['name'],
             'batch_size': config['training']['batch_size'],
             'train': True,
@@ -101,7 +101,7 @@ with tf.Session(config=run_config) as sess:
         init_kwargs['data'] = da
 
         # build model
-        encoder = HyperEncoder(**init_kwargs)
+        encoder = HyperEncoder.build(**init_kwargs)
 
         # train model
         encoder.train(**train_kwargs)
@@ -122,7 +122,7 @@ with tf.Session(config=run_config) as sess:
         # pack the arguments for creating the HyperEncoder
         init_kwargs = {
             'sess': sess,
-            'data': None,
+            'data_controller': None,
             'name': config['model']['name'],
             'batch_size': config['training']['batch_size'],
             'train': True,
@@ -137,7 +137,7 @@ with tf.Session(config=run_config) as sess:
         #init_kwargs['data'] = da
 
         # build model
-        encoder = HyperEncoder(**init_kwargs)
+        encoder = HyperEncoder.build(**init_kwargs)
 
         # freeze model
         encoder.freeze(config['resources']['model_dir'])

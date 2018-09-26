@@ -1,4 +1,5 @@
 import os
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import tensorflow as tf
@@ -17,46 +18,65 @@ except ImportError as e:
 
 
 class HyperEncoder(object):
-    def __init__(self,
-                 sess,
-                 data,
-                 name,
-                 batch_size=64,
-                 train=False,
-                 x_shape=(227, 227, 3),
-                 y_shape=(128, 128, 3),
-                 embed_dim=128,
-                 checkpoint_dir=None):
+    def __init__(self, name, sess, checkpoint_dir):
 
-        self._name = name
+        self.graph = tf.get_default_graph()
         self._loaded = False
-
-        self.data = data
+        self._name = name
         self.sess = sess
-        self._is_training = train
-        self._checkpoint_dir = checkpoint_dir if checkpoint_dir is not None else os.path.join(os.path.dirname(__file__), 'checkpoint')
+        self._checkpoint_dir = checkpoint_dir
 
-        self.batch_size = batch_size
-        self.x_shape = [dim for dim in x_shape]
-        self.y_shape = [dim for dim in y_shape]
-
-        self.emb_dim = embed_dim
-
+        self.data = None
+        self._is_training = None
+        self.batch_size = None
+        self.x_shape = None
+        self.y_shape = None
+        self.emb_dim = None
         self.loss = None
         self.img_sum = None
         self.loss_sum = None
-
         self.embed_layer = None
         self.output_layer = None
         self.decode_loss = None
+        self.saver = None
+        self._checkpoint_counter = None
 
-        self.build_network()
+    @classmethod
+    def build(cls, sess, data_controller, checkpoint_dir, name='HyperEncoder', batch_size=64, x_shape=(227, 227, 3),
+              y_shape=(128, 128, 3), embed_dim=128):
 
-        self.saver = tf.train.Saver()
+        new_class = cls(name, sess, checkpoint_dir)
 
-        print('HyperEncoder Model built:\n\tInput Dimension : {}\n\tEmbedding Size  : {}\n\tOutput Dimension: {}'.format(
-            x_shape, embed_dim, y_shape
-        ))
+        new_class._is_training = True
+        new_class.data = data_controller
+        new_class.batch_size = batch_size
+        new_class.x_shape = [x for x in x_shape]
+        new_class.y_shape = [y for y in y_shape]
+        new_class.embed_dim = embed_dim
+        new_class.loss = None
+        new_class.img_sum = None
+        new_class.loss_sum = None
+        new_class.decode_loss = None
+        new_class.embed_layer = None
+        new_class.output_layer = None
+        new_class.input_layer = None
+        new_class.saver = None
+        new_class._checkpoint_counter = 0
+
+        new_class.build_network()
+
+        ckpt_loaded, checkpoint_counter = new_class._load(True)
+
+        if not ckpt_loaded:
+            new_class._checkpoint_counter = checkpoint_counter
+            print(' [!] Load FAILED')
+        else:
+            new_class._checkpoint_counter = checkpoint_counter
+            new_class._loaded = True
+            print(' [*] Load SUCCESS')
+
+        new_class._loaded = True
+        return new_class
 
     def init_decoder(self, x, scope):
         # decode variables
@@ -66,112 +86,117 @@ class HyperEncoder(object):
         with tf.name_scope(scope):
             # project (4, 4, 1024)
             decode_project_w = tf.get_variable(shape=[x.get_shape()[-1], 4 * 4 * 1024], initializer=initializer,
-                                               name='decode_project_w')
+                                               name='project_w')
             decode_project_b = tf.get_variable(shape=[4 * 4 * 1024], initializer=initializer,
-                                               name='decode_project_b')
+                                               name='project_b')
             decode_project = tf.matmul(x, decode_project_w) + decode_project_b
             decode_project = tf.reshape(decode_project, [self.batch_size, 4, 4, 1024],
-                                        name='decode_project')
+                                        name='project')
             _decode_project = tf.nn.relu(decode_project)
 
             # decode conv 1
             decode_conv1_w = tf.get_variable(shape=[5, 5, 512, 1024], initializer=initializer,
-                                             name='decode_conv1_w')
+                                             name='conv1_w')
             decode_conv1_b = tf.get_variable(shape=[512], initializer=tf.constant_initializer(0.0),
-                                             name='decode_conv1_b')
+                                             name='conv1_b')
             decode_conv1 = tf.nn.conv2d_transpose(_decode_project, decode_conv1_w,
                                                   output_shape=[self.batch_size, 8, 8, 512], strides=strides)
             decode_conv1 = tf.reshape(tf.nn.bias_add(decode_conv1, decode_conv1_b), decode_conv1.get_shape(),
-                                      name='decode_conv1')
+                                      name='conv1')
             _decode_conv1 = tf.nn.relu(decode_conv1)
 
             # decode conv 2
             decode_conv2_w = tf.get_variable(shape=[5, 5, 256, 512], initializer=initializer,
-                                             name='decode_conv2_w')
+                                             name='conv2_w')
             decode_conv2_b = tf.get_variable(shape=[256], initializer=tf.constant_initializer(0.0),
-                                             name='decode_conv2_b')
+                                             name='conv2_b')
             decode_conv2 = tf.nn.conv2d_transpose(_decode_conv1, decode_conv2_w,
                                                   output_shape=[self.batch_size, 16, 16, 256], strides=strides)
             decode_conv2 = tf.reshape(tf.nn.bias_add(decode_conv2, decode_conv2_b), decode_conv2.get_shape(),
-                                      name='decode_conv2')
+                                      name='conv2')
             _decode_conv2 = tf.nn.relu(decode_conv2)
 
             # decode conv 3
             decode_conv3_w = tf.get_variable(shape=[5, 5, 128, 256], initializer=initializer,
-                                             name='decode_conv3_w')
+                                             name='conv3_w')
             decode_conv3_b = tf.get_variable(shape=[128], initializer=tf.constant_initializer(0.0),
-                                             name='decode_conv3_b')
+                                             name='conv3_b')
             decode_conv3 = tf.nn.conv2d_transpose(_decode_conv2, decode_conv3_w,
                                                   output_shape=[self.batch_size, 32, 32, 128], strides=strides)
             decode_conv3 = tf.reshape(tf.nn.bias_add(decode_conv3, decode_conv3_b),
-                                      decode_conv3.get_shape(), name='decode_conv3')
+                                      decode_conv3.get_shape(), name='conv3')
             _decode_conv3 = tf.nn.relu(decode_conv3)
 
             # decode conv 4
-            decode_conv4_w = tf.get_variable(shape=[5, 5, 3, 128], initializer=initializer,
-                                             name='decode_conv4_w')
-            decode_conv4_b = tf.get_variable(shape=[3], initializer=tf.constant_initializer(0.0),
-                                             name='decode_conv4_b')
-            decode_conv4 = tf.nn.conv2d_transpose(_decode_conv3, decode_conv4_w,
-                                                  output_shape=[self.batch_size, 64, 64, 3], strides=strides)
-            decode_conv4 = tf.reshape(tf.nn.bias_add(decode_conv4, decode_conv4_b), decode_conv4.get_shape(),
-                                      name='decode_conv4')
+            conv4_w = tf.get_variable(shape=[5, 5, 64, 128], initializer=initializer, name='conv4_w')
+            conv4_b = tf.get_variable(shape=[64], initializer=tf.constant_initializer(0.0), name='conv4_b')
+            conv4 = tf.nn.conv2d_transpose(_decode_conv3, conv4_w, output_shape=[self.batch_size, 64, 64, 64],
+                                           strides=strides)
+            conv4 = tf.reshape(tf.nn.bias_add(conv4, conv4_b), conv4.get_shape(), name='conv4')
+            _conv4 = tf.nn.relu(conv4)
 
-            output_layer = tf.nn.tanh(decode_conv4, name='y')
+            # decode conv 5
+            conv5_w = tf.get_variable(shape=[5, 5, 3, 64], initializer=initializer, name='conv5_w')
+            conv5_b = tf.get_variable(shape=[3], initializer=tf.constant_initializer(0.0), name='conv5_b')
+            conv5 = tf.nn.conv2d_transpose(_conv4, conv5_w, output_shape=[self.batch_size, 128, 128, 3],
+                                           strides=strides)
+            conv5 = tf.reshape(tf.nn.bias_add(conv5, conv5_b), conv5.get_shape(), name='conv5')
 
-        return [decode_project,
-                decode_conv1,
-                decode_conv2,
-                decode_conv3,
-                decode_conv4,
-                output_layer]
+            output_layer = tf.nn.tanh(conv5, name='y')
 
-    def init_encoder(self, input, scope='encoder'):
+        return output_layer
+
+    def init_encoder(self, input, scope):
 
         with tf.name_scope(scope):
-            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='conv1') # phi 1  conv1
-            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='max1') # phi 1 / max1
+            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='conv1')  # phi 1  conv1
+            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='max1')  # phi 1 / max1
 
-            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='SAME', scope='conv1a') # phi 2 / conv1a
+            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='SAME', scope='conv1a')  # phi 2 / conv1a
 
-            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='conv2') # phi 3 / conv2
-            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='max2') # phi 3 / max2
-            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='conv3') # phi 3 / conv3
+            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='conv2')  # phi 3 / conv2
+            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='max2')  # phi 3 / max2
+            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='conv3')  # phi 3 / conv3
 
-            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='SAME', scope='conv3a') # phi 3 / conv3a
+            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='SAME', scope='conv3a')  # phi 3 / conv3a
 
-            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4') # phi 6 / conv4
-            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5') # phi 6 / conv5
-            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5') # phi 6 / pool5
+            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4')  # phi 6 / conv4
+            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5')  # phi 6 / conv5
+            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5')  # phi 6 / pool5
 
             concat_feat = tf.concat([conv1a, conv3a, pool5], 3)
-            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all') # phi 6 / oonv_all
+            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all')  # phi 6 / oonv_all
 
             shape = int(np.prod(conv_all.get_shape()[1:]))
-            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072, scope='fc_full') # phi 6 / fc_full
+            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072,
+                                              scope='fc_full')  # phi 6 / fc_full
 
-            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2') # phi 6 / fc_full2
-            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='embedding') # phi 6 / embedding
+            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2')  # phi 6 / fc_full2
 
-            return conv3a, conv1a, fc_embed
+            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='embedding')  # phi 6 / embedding
+
+            self.graph.add_to_collection('embedding', fc_embed)
+
+            return fc_embed
 
     def build_network(self):
         with slim.arg_scope([slim.conv2d, slim.fully_connected],
                             activation_fn=tf.nn.relu,
                             weights_initializer=tf.truncated_normal_initializer(0.0, 0.01)):
 
-            # i think this is the true labels
+            # with self.graph.as_default():
+            # this is the true labels
             y_dim = [self.batch_size] + self.y_shape
-            #print('y_dim = {}'.format(y_dim))
             self.y_ = tf.placeholder(tf.float32, y_dim, name='y_')
 
             # input layer
             x_dim = [self.batch_size] + self.x_shape
-            #print('x_dim = {}'.format(x_dim))
             self.x = tf.placeholder(tf.float32, x_dim, name='x')
 
-            self.conv1a, self.conv3a, self.embed_layer = self.init_encoder(self.x, scope='encoder')
-            self.output_layer = self.init_decoder(self.embed_layer, 'decoder')[-1]
+            self.embed_layer = self.init_encoder(self.x, scope='encoder')
+            self.output_layer = self.init_decoder(self.embed_layer, 'decoder')
+
+            self.saver = tf.train.Saver()
 
     def _eval(self, batch, epoch, sample_dir, sample_set):
         # sample results
@@ -192,8 +217,10 @@ class HyperEncoder(object):
 
         print('sample saved at %s' % sample_filename)
 
-    def train(self, learning_rate, beta1, epochs,
-              sample_dir, log_dir):
+    def train(self, learning_rate, beta1, epochs, sample_dir, log_dir):
+
+        if not self._is_training:
+            raise AssertionError('Model is not initialized for training')
 
         print(' [*] Training [%s]' % self.data.name)
 
@@ -239,13 +266,6 @@ class HyperEncoder(object):
 
         self.sess.run(tf.global_variables_initializer())
 
-        ckpt_loaded, checkpoint_counter = self.load(self._checkpoint_dir)
-        if not ckpt_loaded:
-            print(" [!] Load failed...")
-            checkpoint_counter = 0
-        else:
-            print(' [*] Load SUCCESS')
-
         for epoch in range(epochs):
 
             # train on batches
@@ -253,7 +273,8 @@ class HyperEncoder(object):
 
                 if train_step_count % 100 == 0:
                     batch_xs, batch_ys = self.data.next_batch(training=False)
-                    output, summary_str = self.sess.run([self.output_layer, merged], feed_dict={self.x: batch_xs, self.y_: batch_ys})
+                    output, summary_str = self.sess.run([self.output_layer, merged],
+                                                        feed_dict={self.x: batch_xs, self.y_: batch_ys})
 
                     test_writer.add_summary(summary_str, test_sum_counter)
 
@@ -262,8 +283,9 @@ class HyperEncoder(object):
                     y_ = [self.data.denormalize_image(img) for img in batch_ys[:3]]
 
                     sample_image = np.hstack((np.vstack(y), np.vstack(y_)))
-                    
-                    sample_filename = os.path.join(sample_dir, '%d_%d_%d_sample.jpg' % (checkpoint_counter, epoch, test_sum_counter))
+
+                    sample_filename = os.path.join(sample_dir, '%d_%d_%d_sample.jpg' % (
+                    self._checkpoint_counter, epoch, test_sum_counter))
                     cv2.imwrite(sample_filename, sample_image)
                     test_sum_counter += 1
 
@@ -286,10 +308,10 @@ class HyperEncoder(object):
 
                 train_step_count += 1
                 train_sum_counter += 1
-                checkpoint_counter += 1
+                self._checkpoint_counter += 1
 
-                if np.mod(checkpoint_counter, 500) == 2:
-                    self.save(checkpoint_counter)
+                if np.mod(self._checkpoint_counter, 500) == 2:
+                    self.save(self._checkpoint_counter)
 
     def encode(self, x):
         """ Handler to Encode an image into a vector
@@ -318,13 +340,12 @@ class HyperEncoder(object):
         self.saver.save(self.sess, os.path.join(checkpoint_model_dir, model_name),
                         global_step=step)
 
-    def load(self, checkpoint_dir, clear_devices=True):
+    def _load(self, clear_devices=True):
         if not self._loaded:
             print(' [*] reading checkpoints...')
-            checkpoint_model_dir = os.path.join(checkpoint_dir, self.name)
+            checkpoint_model_dir = os.path.join(self._checkpoint_dir, self.name)
 
             ckpt = tf.train.get_checkpoint_state(checkpoint_model_dir)
-            self._loaded = True
 
             if ckpt and ckpt.model_checkpoint_path:
                 ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
@@ -337,14 +358,17 @@ class HyperEncoder(object):
                 return False, 0
 
     def freeze(self, freeze_dir):
-        output_node_names = ['x', 'y']
-        cpk_model_dir = os.path.join(self._checkpoint_dir, self.name)
 
-        self.load(self._checkpoint_dir)
+        # for node in [m.values() for m in self.sess.graph.get_operations()]:
+        #    print(node)
+
+        output_node_names = ['x', 'encoder/embedding/Relu', 'decoder/y']
+
+        self._load(self._checkpoint_dir)
 
         output_graph_def = tf.graph_util.convert_variables_to_constants(
             self.sess,
-            tf.get_default_graph().as_graph_def(),
+            self.graph.as_graph_def(),
             output_node_names
         )
 
