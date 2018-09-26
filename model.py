@@ -20,15 +20,15 @@ class HyperEncoder(object):
     def __init__(self,
                  sess,
                  data,
+                 name,
                  batch_size=64,
                  train=False,
                  x_shape=(227, 227, 3),
                  y_shape=(128, 128, 3),
                  embed_dim=128,
-                 checkpoint_dir=None,
-                 **kwargs):
+                 checkpoint_dir=None):
 
-        self._name = None
+        self._name = name
         self._loaded = False
 
         self.data = data
@@ -117,7 +117,7 @@ class HyperEncoder(object):
             decode_conv4 = tf.reshape(tf.nn.bias_add(decode_conv4, decode_conv4_b), decode_conv4.get_shape(),
                                       name='decode_conv4')
 
-            output_layer = tf.nn.tanh(decode_conv4)
+            output_layer = tf.nn.tanh(decode_conv4, name='y')
 
         return [decode_project,
                 decode_conv1,
@@ -129,44 +129,29 @@ class HyperEncoder(object):
     def init_encoder(self, input, scope='encoder'):
 
         with tf.name_scope(scope):
-            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID') # phi 1  conv1
-            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID') # phi 1 / max1
-            #print('conv1.shape       = {}'.format(conv1.shape))
-            #print('max1.shape        = {}'.format(max1.shape))
+            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='conv1') # phi 1  conv1
+            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='max1') # phi 1 / max1
 
-            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='VALID') # phi 2 / conv1a
-            #print('conv1a.shape      = {}'.format(conv1a.shape))
+            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='SAME', scope='conv1a') # phi 2 / conv1a
 
-            conv2 = slim.conv2d(max1, 256, [5, 5], 1) # phi 3 / conv2
-            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID') # phi 3 / max2
-            conv3 = slim.conv2d(max2, 384, [3, 3], 1) # phi 3 / conv3
-            #print('conv2.shape       = {}'.format(conv2.shape))
-            #print('max2.shape        = {}'.format(max2.shape))
-            #print('conv3.shape       = {}'.format(conv3.shape))
+            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='conv2') # phi 3 / conv2
+            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='max2') # phi 3 / max2
+            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='conv3') # phi 3 / conv3
 
-            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='VALID') # phi 3 / conv3a
-            #print('conv3a.shape      = {}'.format(conv3a.shape))
+            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='SAME', scope='conv3a') # phi 3 / conv3a
 
-            conv4 = slim.conv2d(conv3, 384, [3, 3], 1) # phi 6 / conv4
-            conv5 = slim.conv2d(conv4, 256, [3, 3], 1) # phi 6 / conv5
-            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='VALID') # phi 6 / pool5
-            #print('conv4.shape       = {}'.format(conv4.shape))
-            #print('conv5.shape       = {}'.format(conv5.shape))
-            #print('pool5.shape       = {}'.format(pool5.shape))
+            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4') # phi 6 / conv4
+            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5') # phi 6 / conv5
+            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5') # phi 6 / pool5
 
             concat_feat = tf.concat([conv1a, conv3a, pool5], 3)
-            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID') # phi 6 / oonv_all
-            #print('concat_feat.shape = {}'.format(concat_feat.shape))
-            #print('conv_all.shape    = {}'.format(conv_all.shape))
+            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all') # phi 6 / oonv_all
 
             shape = int(np.prod(conv_all.get_shape()[1:]))
-            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072) # phi 6 / fc_full
+            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072, scope='fc_full') # phi 6 / fc_full
 
-            fc_encode2 = slim.fully_connected(fc_encode1, 512) # phi 6 / fc_full2
-            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim) # phi 6 / embedding
-            #print('fc_encode1.shape  = {}'.format(fc_encode1.shape))
-            #print('fc_encode2.shape  = {}'.format(fc_encode2.shape))
-            #print('fc_embed.shape    = {}'.format(fc_embed.shape))
+            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2') # phi 6 / fc_full2
+            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='embedding') # phi 6 / embedding
 
             return conv3a, conv1a, fc_embed
 
@@ -177,16 +162,16 @@ class HyperEncoder(object):
 
             # i think this is the true labels
             y_dim = [self.batch_size] + self.y_shape
-            print('y_dim = {}'.format(y_dim))
+            #print('y_dim = {}'.format(y_dim))
             self.y_ = tf.placeholder(tf.float32, y_dim, name='y_')
 
             # input layer
             x_dim = [self.batch_size] + self.x_shape
-            print('x_dim = {}'.format(x_dim))
-            self.x = tf.placeholder(tf.float32, x_dim, name='input_images')
+            #print('x_dim = {}'.format(x_dim))
+            self.x = tf.placeholder(tf.float32, x_dim, name='x')
 
             self.conv1a, self.conv3a, self.embed_layer = self.init_encoder(self.x, scope='encoder')
-            self.output_layer = self.init_decoder(self.embed_layer, 'decoder3')[-1]
+            self.output_layer = self.init_decoder(self.embed_layer, 'decoder')[-1]
 
     def _eval(self, batch, epoch, sample_dir, sample_set):
         # sample results
@@ -322,13 +307,6 @@ class HyperEncoder(object):
 
     @property
     def name(self):
-        if self._name is None:
-            d = "{}_{}d_e{}_o{}".format(
-                self.data.name,
-                self.emb_dim,
-                2 if self.x_shape[2] == 1 else 3,
-                self.y_shape[0])
-            self._name = d
         return self._name
 
     def save(self, step):
@@ -359,7 +337,7 @@ class HyperEncoder(object):
                 return False, 0
 
     def freeze(self, freeze_dir):
-        output_node_names = ['input_images', 'y_']
+        output_node_names = ['x', 'y']
         cpk_model_dir = os.path.join(self._checkpoint_dir, self.name)
 
         self.load(self._checkpoint_dir)

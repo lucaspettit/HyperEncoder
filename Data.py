@@ -43,9 +43,6 @@ class dataset(object):
         # check if x is 2D
         self._input_2d = len(x_shape) == 2 or x_shape[2] == 1
 
-        # validate grayscale
-        if not keep_grayscale and self._input_2d:
-            raise ValueError('Cannot omit grayscale and have 2D input. There will be no data to train on.')
         self._keep_grayscale = keep_grayscale
 
         split_index = int(len(datapaths) * split)
