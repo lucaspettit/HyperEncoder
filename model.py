@@ -52,7 +52,7 @@ class HyperEncoder(object):
         new_class.batch_size = batch_size
         new_class.x_shape = [x for x in x_shape]
         new_class.y_shape = [y for y in y_shape]
-        new_class.embed_dim = embed_dim
+        new_class.emb_dim = embed_dim
         new_class.loss = None
         new_class.img_sum = None
         new_class.loss_sum = None

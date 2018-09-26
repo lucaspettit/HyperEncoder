@@ -80,7 +80,6 @@ with tf.Session(config=run_config) as sess:
             'data_controller': None,
             'name': config['model']['name'],
             'batch_size': config['training']['batch_size'],
-            'train': True,
             'x_shape': config['model']['x_dim'],
             'y_shape': config['model']['y_dim'],
             'embed_dim': config['model']['embed_dim'],
@@ -98,7 +97,7 @@ with tf.Session(config=run_config) as sess:
 
         # build data adapter
         da = dataset(**data_kwargs)
-        init_kwargs['data'] = da
+        init_kwargs['data_controller'] = da
 
         # build model
         encoder = HyperEncoder.build(**init_kwargs)
@@ -125,7 +124,6 @@ with tf.Session(config=run_config) as sess:
             'data_controller': None,
             'name': config['model']['name'],
             'batch_size': config['training']['batch_size'],
-            'train': True,
             'x_shape': config['model']['x_dim'],
             'y_shape': config['model']['y_dim'],
             'embed_dim': config['model']['embed_dim'],
