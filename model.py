@@ -28,6 +28,9 @@ class HyperEncoder(object):
                  checkpoint_dir=None,
                  **kwargs):
 
+        self._name = None
+        self._loaded = False
+
         self.data = data
         self.sess = sess
         self._is_training = train
@@ -126,42 +129,41 @@ class HyperEncoder(object):
     def init_encoder(self, input, scope='encoder'):
 
         with tf.name_scope(scope):
-            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID', scope='conv1') # phi 1
-            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID', scope='max1') # phi 1
+            conv1 = slim.conv2d(input, 96, [11, 11], 4, padding='VALID') # phi 1  conv1
+            max1 = slim.max_pool2d(conv1, [3, 3], 2, padding='VALID') # phi 1 / max1
             #print('conv1.shape       = {}'.format(conv1.shape))
             #print('max1.shape        = {}'.format(max1.shape))
 
-            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='VALID', scope='conv1a') # phi 2
+            conv1a = slim.conv2d(max1, 256, [4, 4], 4, padding='VALID') # phi 2 / conv1a
             #print('conv1a.shape      = {}'.format(conv1a.shape))
 
-            conv2 = slim.conv2d(max1, 256, [5, 5], 1, scope='conv2') # phi 3
-            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID', scope='max2') # phi 3
-            conv3 = slim.conv2d(max2, 384, [3, 3], 1, scope='conv3') # phi 3
+            conv2 = slim.conv2d(max1, 256, [5, 5], 1) # phi 3 / conv2
+            max2 = slim.max_pool2d(conv2, [3, 3], 2, padding='VALID') # phi 3 / max2
+            conv3 = slim.conv2d(max2, 384, [3, 3], 1) # phi 3 / conv3
             #print('conv2.shape       = {}'.format(conv2.shape))
             #print('max2.shape        = {}'.format(max2.shape))
             #print('conv3.shape       = {}'.format(conv3.shape))
 
-            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='VALID', scope='conv3a') # phi 3
+            conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='VALID') # phi 3 / conv3a
             #print('conv3a.shape      = {}'.format(conv3a.shape))
 
-            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4') # phi 6
-            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5') # phi 6
-            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5') # phi 6
+            conv4 = slim.conv2d(conv3, 384, [3, 3], 1) # phi 6 / conv4
+            conv5 = slim.conv2d(conv4, 256, [3, 3], 1) # phi 6 / conv5
+            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='VALID') # phi 6 / pool5
             #print('conv4.shape       = {}'.format(conv4.shape))
             #print('conv5.shape       = {}'.format(conv5.shape))
             #print('pool5.shape       = {}'.format(pool5.shape))
 
             concat_feat = tf.concat([conv1a, conv3a, pool5], 3)
-            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all') # phi 6
+            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID') # phi 6 / oonv_all
             #print('concat_feat.shape = {}'.format(concat_feat.shape))
             #print('conv_all.shape    = {}'.format(conv_all.shape))
 
             shape = int(np.prod(conv_all.get_shape()[1:]))
-            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072,
-                                              scope='fc_full1') # phi 6
+            fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072) # phi 6 / fc_full
 
-            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2') # phi 6
-            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='layer') # phi 6
+            fc_encode2 = slim.fully_connected(fc_encode1, 512) # phi 6 / fc_full2
+            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim) # phi 6 / embedding
             #print('fc_encode1.shape  = {}'.format(fc_encode1.shape))
             #print('fc_encode2.shape  = {}'.format(fc_encode2.shape))
             #print('fc_embed.shape    = {}'.format(fc_embed.shape))
@@ -196,7 +198,7 @@ class HyperEncoder(object):
         sample_ = np.vstack(y_)
         sample = np.hstack((sample, sample_))
 
-        sample_model_dir = os.path.join(sample_dir, self.model_dir)
+        sample_model_dir = os.path.join(sample_dir, self.name)
         if not os.path.isdir(sample_model_dir):
             os.makedirs(sample_model_dir)
 
@@ -216,7 +218,7 @@ class HyperEncoder(object):
         test_eval = self.data.next_batch(training=False)
         training_eval = self.data.next_batch(training=True)
 
-        sample_dir = os.path.join(sample_dir, self.model_dir)
+        sample_dir = os.path.join(sample_dir, self.name)
         if not os.path.isdir(sample_dir):
             os.makedirs(sample_dir)
 
@@ -236,8 +238,8 @@ class HyperEncoder(object):
 
         # make writer path
         print(' [*] Initializing writers')
-        train_writer_path = os.path.join(log_dir, self.model_dir, 'train')
-        test_writer_path = os.path.join(log_dir, self.model_dir, 'test')
+        train_writer_path = os.path.join(log_dir, self.name, 'train')
+        test_writer_path = os.path.join(log_dir, self.name, 'test')
         for path in (train_writer_path, test_writer_path):
             if not os.path.isdir(path):
                 os.makedirs(path)
@@ -319,32 +321,59 @@ class HyperEncoder(object):
         return None
 
     @property
-    def model_dir(self):
-        d = "{}_{}_{}_{}".format(
-            self.data.name, self.batch_size,
-            64, 64)
-        return d
+    def name(self):
+        if self._name is None:
+            d = "{}_{}d_e{}_o{}".format(
+                self.data.name,
+                self.emb_dim,
+                2 if self.x_shape[2] == 1 else 3,
+                self.y_shape[0])
+            self._name = d
+        return self._name
 
     def save(self, step):
         model_name = 'HyperEncoder.model'
-        checkpoint_model_dir = os.path.join(self._checkpoint_dir, self.model_dir)
+        checkpoint_model_dir = os.path.join(self._checkpoint_dir, self.name)
         if not os.path.exists(checkpoint_model_dir):
             os.makedirs(checkpoint_model_dir)
 
         self.saver.save(self.sess, os.path.join(checkpoint_model_dir, model_name),
                         global_step=step)
 
-    def load(self, checkpoint_dir):
-        print(' [*] reading checkpoints...')
-        checkpoint_model_dir = os.path.join(checkpoint_dir, self.model_dir)
+    def load(self, checkpoint_dir, clear_devices=True):
+        if not self._loaded:
+            print(' [*] reading checkpoints...')
+            checkpoint_model_dir = os.path.join(checkpoint_dir, self.name)
 
-        ckpt = tf.train.get_checkpoint_state(checkpoint_model_dir)
-        if ckpt and ckpt.model_checkpoint_path:
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            self.saver.restore(self.sess, os.path.join(checkpoint_model_dir, ckpt_name))
-            counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
-            print(" [*] Success to read {}".format(ckpt_name))
-            return True, counter
-        else:
-            print(" [*] Failed to find a checkpoint")
-            return False, 0
+            ckpt = tf.train.get_checkpoint_state(checkpoint_model_dir)
+            self._loaded = True
+
+            if ckpt and ckpt.model_checkpoint_path:
+                ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+                self.saver.restore(self.sess, os.path.join(checkpoint_model_dir, ckpt_name))
+                counter = int(next(re.finditer("(\d+)(?!.*\d)", ckpt_name)).group(0))
+                print(" [*] Success to read {}".format(ckpt_name))
+                return True, counter
+            else:
+                print(" [*] Failed to find a checkpoint")
+                return False, 0
+
+    def freeze(self, freeze_dir):
+        output_node_names = ['input_images', 'y_']
+        cpk_model_dir = os.path.join(self._checkpoint_dir, self.name)
+
+        self.load(self._checkpoint_dir)
+
+        output_graph_def = tf.graph_util.convert_variables_to_constants(
+            self.sess,
+            tf.get_default_graph().as_graph_def(),
+            output_node_names
+        )
+
+        if not os.path.isdir(freeze_dir):
+            os.makedirs(freeze_dir)
+        with tf.gfile.GFile(os.path.join(freeze_dir, '%s.pb'), 'wb') as f:
+            f.write(output_graph_def.SerializeToString())
+        print('%d ops in the final graph.' % len(output_graph_def.node))
+
+        return output_graph_def

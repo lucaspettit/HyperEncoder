@@ -98,11 +98,11 @@ if __name__ == '__main__':
 
         # make dirs
         if not os.path.exists(args.checkpoint_dir):
-            os.mkdir(args.checkpoint_dir)
+            os.makedirs(args.checkpoint_dir)
         if not os.path.exists(args.sample_dir):
-            os.mkdir(args.sample_dir)
+            os.makedirs(args.sample_dir)
         if not os.path.exists(args.log_dir):
-            os.mkdir(args.log_dir)
+            os.makedirs(args.log_dir)
 
         return args
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     run_config.gpu_options.allow_growth = True
     with tf.Session(config=run_config) as sess:
 
-        if args.train:
+        if False: #args.train:
             kwargs = vars(args)
             ds = dataset(datapath, batch_size, x_shape, y_shape, name=dsname)
 
@@ -136,4 +136,17 @@ if __name__ == '__main__':
                           sample_dir=kwargs['sample_dir'],
                           log_dir=kwargs['log_dir'])
 
+            print('done!')
 
+        else:
+            kwargs = vars(args)
+            ds = dataset(datapath, batch_size, x_shape, y_shape, name=dsname)
+
+            encoder = HyperEncoder(sess=sess,
+                                   data=ds,
+                                   x_shape=x_shape,
+                                   y_shape=y_shape,
+                                   embed_dim=args.embed_size,
+                                   **kwargs)
+
+            encoder.freeze('D:\\datasets\\hyperencoder\\frozen')
