@@ -18,13 +18,12 @@ except ImportError as e:
 
 
 class HyperEncoder(object):
-    def __init__(self, name, sess, checkpoint_dir):
+    def __init__(self, name, sess):
 
         self.graph = tf.get_default_graph()
         self._loaded = False
         self._name = name
         self.sess = sess
-        self._checkpoint_dir = checkpoint_dir
 
         self.data = None
         self._is_training = None
@@ -45,8 +44,9 @@ class HyperEncoder(object):
     def build(cls, sess, data_controller, checkpoint_dir, name='HyperEncoder', batch_size=64, x_shape=(227, 227, 3),
               y_shape=(128, 128, 3), embed_dim=128):
 
-        new_class = cls(name, sess, checkpoint_dir)
+        new_class = cls(name, sess)
 
+        new_class._checkpoint_dir = checkpoint_dir
         new_class._is_training = True
         new_class.data = data_controller
         new_class.batch_size = batch_size
@@ -76,6 +76,41 @@ class HyperEncoder(object):
             print(' [*] Load SUCCESS')
 
         new_class._loaded = True
+        return new_class
+
+
+    @classmethod
+    def load_frozen(cls, sess, frozen_filename, name='HyperEncoder'):
+        # create the new class
+        new_class = cls(name, sess)
+        new_class._is_training = False
+        new_class.data = None
+        new_class.loss = None
+        new_class.img_sum = None
+        new_class.loss_sum = None
+        new_class.decode_loss = None
+        new_class.embed_layer = None
+        new_class.output_layer = None
+        new_class.input_layer = None
+        new_class.saver = None
+        new_class._checkpoint_counter = 0
+
+        # load the protobuf file from the disk and parse it to retrieve the unserialized graph_def
+        with tf.gfile.GFile(frozen_filename, "rb") as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+
+        # import the graph_def into the default_graph
+        graph = tf.get_default_graph()
+        tf.import_graph_def(graph_def, name=name)
+
+        #for op in graph.get_operations():
+        #    print(op.name)
+
+        new_class.x = graph.get_tensor_by_name('%s/x:0' % name)
+        new_class.embed_layer = graph.get_tensor_by_name('%s/encoder/embedding/Relu:0' % name)
+        new_class.output_layer = graph.get_tensor_by_name('%s/decoder/y:0' % name)
+
         return new_class
 
     def init_decoder(self, x, scope):
@@ -313,19 +348,25 @@ class HyperEncoder(object):
                 if np.mod(self._checkpoint_counter, 500) == 2:
                     self.save(self._checkpoint_counter)
 
-    def encode(self, x):
+    def encode(self, images):
         """ Handler to Encode an image into a vector
-        :param x: numpy matrix or list of numpy matrixes (images) - image dim must be equivalent to input size
+        :param images: list of numpy matrixes (images) - image dim must be equivalent to input size
         :return: numpy matrix (embeddings)
         """
-        return None
 
-    def decode(self, x):
+        embs = self.sess.run(self.embed_layer, feed_dict={self.x: images})
+
+        return embs
+
+    def decode(self, embeddings):
         """ Handler to Decode a vector into an image
-        :param x: numpy matrix or list f numpy matrixes (vectors) - n = number of vectors, m = embedding size
+        :param x: list of numpy matrixes (vectors) - n = number of vectors, m = embedding size
         :return: numpy matrix or list of numpy matrixes (images)
         """
-        return None
+
+        imgs = self.sess.run(self.output_layer, feed_dict={self.embed_layer: embeddings})
+
+        return imgs
 
     @property
     def name(self):
@@ -374,7 +415,7 @@ class HyperEncoder(object):
 
         if not os.path.isdir(freeze_dir):
             os.makedirs(freeze_dir)
-        with tf.gfile.GFile(os.path.join(freeze_dir, '%s.pb'), 'wb') as f:
+        with tf.gfile.GFile(os.path.join(freeze_dir, '%s.pb' % self.name), 'wb') as f:
             f.write(output_graph_def.SerializeToString())
         print('%d ops in the final graph.' % len(output_graph_def.node))
 

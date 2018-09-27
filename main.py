@@ -30,37 +30,47 @@ def load_config():
     with open(sys.argv[1]) as f:
         config = json.load(f)
 
-    # create default paths
-    if config['resources']['model_dir'] is None:
-        config['resources']['model_dir'] = os.path.join(os.path.dirname(__file__), 'models')
-    if config['resources']['tf_record_dir'] is None:
-        config['resources']['tf_record_dir'] = os.path.join(os.path.dirname(__file__), 'tf_record')
+    op = config['operation']
+    if op == 'train':
+        # create directories if needed
+        dirs = [
+            config['resources']['checkpoint_dir'],
+            config['resources']['sample_dir'],
+            config['resources']['log_dir']
+        ]
 
-    # create directories if needed
-    dirs = [
-        config['resources']['model_dir'],
-        config['resources']['tf_record_dir'],
-        config['resources']['checkpoint_dir'],
-        config['resources']['sample_dir'],
-        config['resources']['log_dir']
-    ]
+    elif op in ('freeze', 'load'):
+        # create default paths
+        if config['resources']['model_dir'] is None:
+            config['resources']['model_dir'] = os.path.join(os.path.dirname(__file__), 'models')
+        if config['resources']['tf_record_dir'] is None:
+            config['resources']['tf_record_dir'] = os.path.join(os.path.dirname(__file__), 'tf_record')
+
+        # create directories if needed
+        dirs = [
+            config['resources']['model_dir'],
+            config['resources']['tf_record_dir'],
+            config['resources']['checkpoint_dir'],
+        ]
+    else:
+        raise ValueError('Unrecognized operation "{}"'.format(op))
+
     for d in dirs:
         if not os.path.exists(d):
             os.makedirs(d)
 
     return config
 
+
 config = load_config()
 
-datapath = config['resources']['dataset_dir']
-dsname = config['data']['dataset_name']
-train = config['training']['train']
-keep_grayscale = config['data']['keep_grayscale_training']
+op = config['operation']
 
 run_config = tf.ConfigProto()
 run_config.gpu_options.allow_growth = True
+
 with tf.Session(config=run_config) as sess:
-    if train:
+    if op == 'train':
 
         # pack arguments for creating dataset
         data_kwargs = {
@@ -105,19 +115,7 @@ with tf.Session(config=run_config) as sess:
         # train model
         encoder.train(**train_kwargs)
 
-    else:
-        # pack arguments for creating dataset
-        data_kwargs = {
-            'input_dir': config['resources']['dataset_dir'],
-            'batch_size': config['training']['batch_size'],
-            'x_shape': config['model']['x_dim'],
-            'y_shape': config['model']['y_dim'],
-            'split': config['data']['split'],
-            'name': config['data']['dataset_name'],
-            'keep_grayscale': config['data']['keep_grayscale_training'],
-            'shuffle': config['data']['shuffle']
-        }
-
+    elif op == 'freeze':
         # pack the arguments for creating the HyperEncoder
         init_kwargs = {
             'sess': sess,
@@ -130,14 +128,40 @@ with tf.Session(config=run_config) as sess:
             'checkpoint_dir': config['resources']['checkpoint_dir']
         }
 
-        # build data adapter
-        #da = dataset(**data_kwargs)
-        #init_kwargs['data'] = da
-
         # build model
         encoder = HyperEncoder.build(**init_kwargs)
 
         # freeze model
         encoder.freeze(config['resources']['model_dir'])
+
+    elif op == 'load':
+        import cv2
+        import matplotlib.pyplot as plt
+
+        frozen_filename ='%s.pb' % config['model']['name']
+        full_frozen_filename = os.path.join(config['resources']['model_dir'], frozen_filename)
+
+        encoder = HyperEncoder.load_frozen(sess, full_frozen_filename)
+
+        x_dim = tuple(config['model']['x_dim'][:2])
+        img = cv2.imread('res/cat.jpg')
+        img = cv2.resize(img, x_dim, interpolation=cv2.INTER_CUBIC)
+        #img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+        x_shape = tuple(config['model']['x_dim'])
+        x_size = np.product(np.array(x_shape))
+        padding = [np.zeros(x_size, dtype=np.uint8).reshape(x_shape) for _ in range(63)]
+        input = [img] + padding
+
+        embs = encoder.encode(input)
+        print(embs[0])
+
+        _img = encoder.decode(embs)[1]
+
+        _img = cv2.cvtColor(_img, cv2.COLOR_RGB2BGR)
+        plt.imshow(_img)
+        plt.show()
+
+
 
 print('done!')
