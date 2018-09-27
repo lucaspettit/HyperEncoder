@@ -1,0 +1,30 @@
+{
+	"version": [0, 0, 1],
+	"operation": "<load, train, or freeze>",
+	"model": {
+		"x_dim": [227, 227, 3],
+		"y_dim": [128, 128, 3],
+		"embed_dim": 64,
+		"name": "<model_name>"
+	},
+	"training": {
+		"epochs": 25,
+		"learning_rate": 0.0002,
+		"beta1": 0.5,
+		"batch_size": 64
+	},
+	"data": {
+		"keep_grayscale_training": false,
+		"dataset_name": "<dataset_name>",
+		"split": 0.8,
+		"shuffle": true
+	},
+	"resources": {
+		"dataset_dir": "<path_to_dataset_directory>",
+		"model_dir": "<path_to_frozen_model_directory>",
+		"tf_record_dir": "<?>",
+		"checkpoint_dir": "<path_to_checkpoint_directory>",
+		"sample_dir": "<path_to_samples_directory>",
+		"log_dir": "<path_to_logs_directory>"
+	}
+}
