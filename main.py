@@ -142,7 +142,6 @@ with tf.Session(config=run_config) as sess:
 
         root_dir = os.path.join('res', 'gifs')
         for d in os.listdir(root_dir):
-            # file_dir = os.path.join('res', 'luke')
             file_dir = os.path.join(root_dir, d)
 
             files = os.listdir(file_dir)
@@ -179,6 +178,8 @@ with tf.Session(config=run_config) as sess:
 
             cv2.destroyAllWindows()
 
-            imageio.mimsave(os.path.join('output', '%d.gif' % i), images)
+            if d != '6':
+                images = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in images]
+            imageio.mimsave(os.path.join('output', '%s.gif' % d), images)
 
 print('done!')
