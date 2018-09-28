@@ -10,6 +10,7 @@ import time
 import cv2
 import re
 import os
+from math import floor
 
 try:
     from hyperencoder.Data import dataset
@@ -39,6 +40,8 @@ class HyperEncoder(object):
         self.decode_loss = None
         self.saver = None
         self._checkpoint_counter = None
+        self._input_padding = None
+        self._embed_padding = None
 
     @classmethod
     def build(cls, sess, data_controller, checkpoint_dir, name='HyperEncoder', batch_size=64, x_shape=(227, 227, 3),
@@ -110,6 +113,16 @@ class HyperEncoder(object):
         new_class.x = graph.get_tensor_by_name('%s/x:0' % name)
         new_class.embed_layer = graph.get_tensor_by_name('%s/encoder/embedding/Relu:0' % name)
         new_class.output_layer = graph.get_tensor_by_name('%s/decoder/y:0' % name)
+
+        new_class.batch_size = new_class.x.shape[0]
+        new_class.x_shape = new_class.x.shape[1:]
+        new_class.y_shape = new_class.output_layer.shape[1:]
+        new_class.emb_dim = new_class.embed_layer.shape[1]
+
+        x_shape = np.array(new_class.x_shape)
+        #x_size = np.product(x_shape)
+        new_class._input_padding = [np.zeros(x_shape, dtype=np.uint8)] * new_class.batch_size
+        new_class._embed_padding = np.zeros((new_class.batch_size, new_class.emb_dim))
 
         return new_class
 
@@ -195,20 +208,20 @@ class HyperEncoder(object):
 
             conv3a = slim.conv2d(conv3, 256, [2, 2], 2, padding='SAME', scope='conv3a')  # phi 3 / conv3a
 
-            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4')  # phi 6 / conv4
-            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5')  # phi 6 / conv5
-            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5')  # phi 6 / pool5
+            conv4 = slim.conv2d(conv3, 384, [3, 3], 1, scope='conv4')  # phi 5 / conv4
+            conv5 = slim.conv2d(conv4, 256, [3, 3], 1, scope='conv5')  # phi 5 / conv5
+            pool5 = slim.max_pool2d(conv5, [3, 3], 2, padding='SAME', scope='pool5')  # phi 5 / pool5
 
             concat_feat = tf.concat([conv1a, conv3a, pool5], 3)
-            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all')  # phi 6 / oonv_all
+            conv_all = slim.conv2d(concat_feat, 192, [1, 1], 1, padding='VALID', scope='conv_all')  # phi 5 / oonv_all
 
             shape = int(np.prod(conv_all.get_shape()[1:]))
             fc_encode1 = slim.fully_connected(tf.reshape(tf.transpose(conv_all, [0, 3, 1, 2]), [-1, shape]), 3072,
-                                              scope='fc_full')  # phi 6 / fc_full
+                                              scope='fc_full')  # phi 5 / fc_full
 
-            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2')  # phi 6 / fc_full2
+            fc_encode2 = slim.fully_connected(fc_encode1, 512, scope='fc_full2')  # phi 5 / fc_full2
 
-            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='embedding')  # phi 6 / embedding
+            fc_embed = slim.fully_connected(fc_encode2, self.emb_dim, scope='embedding')  # phi 5 / embedding
 
             self.graph.add_to_collection('embedding', fc_embed)
 
@@ -354,7 +367,28 @@ class HyperEncoder(object):
         :return: numpy matrix (embeddings)
         """
 
-        embs = self.sess.run(self.embed_layer, feed_dict={self.x: images})
+        i = 0
+        N = len(images)
+        embs = None
+
+        while True:
+            end = min(N, i + self.batch_size)
+            batch = images[i: end]
+
+            size = end - i
+            if size < self.batch_size:
+                batch += self._input_padding[:self.batch_size - size]
+
+            if embs is None:
+                embs = self.sess.run(self.embed_layer, feed_dict={self.x: batch})
+            else:
+                _embs = self.sess.run(self.embed_layer, feed_dict={self.x: batch})
+                embs = np.vstack((embs, _embs))
+
+            i += self.batch_size
+
+            if i >= N - 1:
+                break
 
         return embs
 
@@ -363,8 +397,28 @@ class HyperEncoder(object):
         :param x: list of numpy matrixes (vectors) - n = number of vectors, m = embedding size
         :return: numpy matrix or list of numpy matrixes (images)
         """
+        def denormalize(img):
+            _img = img + 1.0
+            _img = _img * (255.0 / 2.0)
+            return _img.astype(np.uint8)
 
-        imgs = self.sess.run(self.output_layer, feed_dict={self.embed_layer: embeddings})
+        i = 0
+        N = len(embeddings)
+        imgs = []
+        while True:
+            end = min(N, i + self.batch_size)
+            batch = embeddings[i: end]
+
+            size = end - i
+            if size < self.batch_size:
+                batch += self._embed_padding[: self.batch_size - size]
+
+            _imgs = self.sess.run(self.output_layer, feed_dict={self.embed_layer: batch})
+            imgs += [denormalize(_imgs[i]) for i in range(size)]
+
+            i += self.batch_size
+            if i >= N - 1:
+                break
 
         return imgs
 

@@ -11,13 +11,6 @@ except ImportError:
     from hyperencoder.Data import dataset
 
 
-# make log dir
-# if not os.path.exists('logs'):
-#    os.mkdir('logs')
-
-# idk what this is doing
-# map(os.unlink, (os.path.join('logs', f) for f in os.listdir('logs')))
-
 def load_config():
     # check for correct number of arguments
     if len(sys.argv) != 2:
@@ -137,31 +130,55 @@ with tf.Session(config=run_config) as sess:
     elif op == 'load':
         import cv2
         import matplotlib.pyplot as plt
+        import imageio
 
-        frozen_filename ='%s.pb' % config['model']['name']
+        frozen_filename = '%s.pb' % config['model']['name']
         full_frozen_filename = os.path.join(config['resources']['model_dir'], frozen_filename)
+
+        if not os.path.isdir('output'):
+            os.makedirs('output')
 
         encoder = HyperEncoder.load_frozen(sess, full_frozen_filename)
 
-        x_dim = tuple(config['model']['x_dim'][:2])
-        img = cv2.imread('res/cat.jpg')
-        img = cv2.resize(img, x_dim, interpolation=cv2.INTER_CUBIC)
-        #img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        root_dir = os.path.join('res', 'gifs')
+        for d in os.listdir(root_dir):
+            # file_dir = os.path.join('res', 'luke')
+            file_dir = os.path.join(root_dir, d)
 
-        x_shape = tuple(config['model']['x_dim'])
-        x_size = np.product(np.array(x_shape))
-        padding = [np.zeros(x_size, dtype=np.uint8).reshape(x_shape) for _ in range(63)]
-        input = [img] + padding
+            files = os.listdir(file_dir)
+            files = sorted(files, key=lambda s: int(s.split('.')[0].split('-')[-1]))
+            imgs = [cv2.imread('%s/%s' % (file_dir, f)) for f in files]
+            imgs = [cv2.resize(img, (227, 227), interpolation=cv2.INTER_CUBIC) for img in imgs]
 
-        embs = encoder.encode(input)
-        print(embs[0])
+            embs = encoder.encode(imgs)
 
-        _img = encoder.decode(embs)[1]
+            _imgs = encoder.decode(embs)[:len(files)]
+            _imgs = [cv2.resize(img, (227, 227), interpolation=cv2.INTER_CUBIC) for img in _imgs]
 
-        _img = cv2.cvtColor(_img, cv2.COLOR_RGB2BGR)
-        plt.imshow(_img)
-        plt.show()
+            cv2.namedWindow('display', cv2.WINDOW_NORMAL)
+            print(d)
+            i = 0
+            pause = False
 
+            images = []
+            while i < len(imgs):
+                img = imgs[i]
+                _img = _imgs[i]
+                _img = np.hstack((img, _img))
 
+                cv2.imshow('display', _img)
+                k = cv2.waitKey(100)
+                if k == 27:
+                    break
+                elif k == 32:
+                    pause = not pause
+
+                if not pause:
+                    images.append(_img)
+                    i += 1
+
+            cv2.destroyAllWindows()
+
+            imageio.mimsave(os.path.join('output', '%d.gif' % i), images)
 
 print('done!')

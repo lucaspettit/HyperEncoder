@@ -102,15 +102,18 @@ class dataset(object):
             img[:,:,i] = gray
         return img
 
-    def _get_xy(self, filename, keep_grayscale=True):
+    def _get_xy(self, filename, keep_grayscale):
         res = None
         try:
             img = cv2.imread(filename)
 
             # check for and handle grayscale images
             shape = img.shape
-            if (len(shape) < 3 or shape[2] == 1) and keep_grayscale and not self._input_2d:
-                img = self._grayscaleToRGB(img)
+            if len(shape) < 3 or shape[2] == 1:
+                if not keep_grayscale:
+                    return None
+                elif not self._input_2d:
+                    img = self._grayscaleToRGB(img)
 
             y = cv2.resize(img, self._y_shape[:2], interpolation=cv2.INTER_CUBIC)
             x = cv2.resize(img, self._x_shape[:2], interpolation=cv2.INTER_CUBIC)
@@ -165,7 +168,7 @@ class dataset(object):
 
             while len(batch_x) < self._batch_size:
                 filename = self._get_next_filepath(training=False)
-                res = self._get_xy(filename)
+                res = self._get_xy(filename, True)
                 if res is None:
                     continue
                 x, y = res
@@ -201,7 +204,7 @@ class dataset(object):
                 idx = randint(0, self._num_test_data - 1)
                 filename = self._test_paths[idx]
 
-            res = self._get_xy(filename)
+            res = self._get_xy(filename, self._keep_grayscale)
             if res is None:
                 continue
 
