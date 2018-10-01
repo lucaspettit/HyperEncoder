@@ -14,40 +14,55 @@ class dataset(object):
     """
 
     def __init__(self,
-                 input_dir,
+                 train_dir,
                  batch_size,
-                 x_shape,
+                 test_dir = None,
+                 x_shape=(227, 227),
                  y_shape=None,
                  split=0.9,
                  name=None,
                  keep_grayscale=True,
                  shuffle=True):
 
-        datapaths = [os.path.join(input_dir, f) for f in os.listdir(input_dir)
-                     if os.path.isfile(os.path.join(input_dir, f))]
 
-
-        if shuffle:
-            _shuffle(datapaths)
 
         if name is None:
-            self.name = os.path.basename(input_dir)
+            self.name = os.path.basename(train_dir)
         else:
             self.name = name
 
         self._x_shape = tuple(x_shape)
         self._y_shape = x_shape if y_shape is None else tuple(y_shape)
         self._batch_size = batch_size
-        self.num_batches = int(len(datapaths) / batch_size)
 
         # check if x is 2D
         self._input_2d = len(x_shape) == 2 or x_shape[2] == 1
 
         self._keep_grayscale = keep_grayscale
 
-        split_index = int(len(datapaths) * split)
-        self._training_paths = datapaths[:split_index]
-        self._test_paths = datapaths[split_index:]
+
+        # if we're only given one dataset path (i.e. train_dir), then we need to split the dataset
+        if test_dir is None:
+            datapaths = [os.path.join(train_dir, f) for f in os.listdir(train_dir)]
+
+            if shuffle:
+                _shuffle(datapaths)
+
+            split_index = int(len(datapaths) * split)
+            self._training_paths = datapaths[:split_index]
+            self._test_paths = datapaths[split_index:]
+            self.num_batches = int(len(self._training_paths) / batch_size)
+
+        # if we're given two dataset paths (i.e. train_dir + test_dir) then we do NOT need to split the dataset
+        else:
+            self._training_paths = [os.path.join(train_dir, f) for f in os.listdir(train_dir)]
+            self._test_paths = [os.path.join(test_dir, f) for f in os.listdir(test_dir)]
+
+            if shuffle:
+                _shuffle(self._training_paths)
+                _shuffle(self._test_paths)
+
+            self.num_batches = int(len(self._training_paths) / batch_size)
 
         self._num_training_data = len(self._training_paths)
         self._num_test_data = len(self._test_paths)

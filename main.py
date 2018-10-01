@@ -67,7 +67,8 @@ with tf.Session(config=run_config) as sess:
 
         # pack arguments for creating dataset
         data_kwargs = {
-            'input_dir': config['resources']['dataset_dir'],
+            'train_dir': config['resources']['training_set_dir'],
+            'test_dir': config['resources']['test_set_dir'],
             'batch_size': config['training']['batch_size'],
             'x_shape': config['model']['x_dim'],
             'y_shape': config['model']['y_dim'],
